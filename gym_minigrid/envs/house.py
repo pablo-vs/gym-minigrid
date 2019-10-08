@@ -12,6 +12,8 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
+CELL_PIXELS = 32
+
 class HouseEnv(MiniGridEnv):
     """
     House environment for IDA
@@ -27,30 +29,30 @@ class HouseEnv(MiniGridEnv):
 
     def __init__(
             self,
-            lattice,
             room_w = 5,
             room_h = 5,
+            size = 31,
     ):
-        self.lattice = lattice
         self.room_w = room_w
         self.room_h = room_h
 
         super().__init__(
-                grid_size=0,
+                grid_size=size,
                 max_steps=5*5**2,
                 # Set this to True for maximum speed
                 see_through_walls=False,
-                agent_view_size=self.room_w+1
+                agent_view_size=self.room_w+2
         )
 
         self.actions = self.Actions
 
     def _gen_grid(self, width=None, height=None):
         # Gen lattice
-        #self.lattice = Lattice()
+        self.lattice = Lattice()
 
         # Create the grid
-        self.grid = House(self.lattice, self.room_w, self.room_h)
+        self.grid = House(self.lattice, self.room_w, self.room_h,
+                            width=width, height=height)
 
         self.width = self.grid.width
         self.height = self.grid.height
@@ -95,8 +97,8 @@ class HouseEnv(MiniGridEnv):
         ax, ay = self.agent_pos
 
         # Compute the absolute coordinates of the top-left view corner
-        tx = (self.room_w+1)*(ax%(self.room_w+1))
-        ty = (self.room_h+1)*(ay%(self.room_h+1))
+        tx = (self.room_w+1)*(ax//(self.room_w+1))
+        ty = (self.room_h+1)*(ay//(self.room_h+1))
 
         vx = i - tx
         vy = j - ty
@@ -107,8 +109,8 @@ class HouseEnv(MiniGridEnv):
 
         ax, ay = self.agent_pos
 
-        tx = (self.room_w+1)*(ax%(self.room_w+1))
-        ty = (self.room_h+1)*(ay%(self.room_h+1))
+        tx = (self.room_w+1)*(ax//(self.room_w+1))
+        ty = (self.room_h+1)*(ay//(self.room_h+1))
         bx = tx + self.room_w+2
         by = ty + self.room_h+2
         return (tx, ty, bx, by)
@@ -227,6 +229,91 @@ class HouseEnv(MiniGridEnv):
         return grid, vis_mask
 
 
+    def render(self, mode='human', close=False, highlight=True, tile_size=CELL_PIXELS):
+        """
+        Render the whole-grid human view
+        """
+
+        if close:
+            if self.grid_render:
+                self.grid_render.close()
+            return
+
+        if self.grid_render is None or self.grid_render.window is None or (self.grid_render.width != self.width * tile_size):
+            from gym_minigrid.rendering import Renderer
+            self.grid_render = Renderer(
+                self.width * tile_size,
+                self.height * tile_size,
+                True if mode == 'human' else False
+            )
+
+        r = self.grid_render
+
+        if r.window:
+            r.window.setText(self.mission)
+
+        r.beginFrame()
+
+        # Render the whole grid
+        self.grid.render(r, tile_size)
+
+        # Draw the agent
+        ratio = tile_size / CELL_PIXELS
+        r.push()
+        r.scale(ratio, ratio)
+        r.translate(
+            CELL_PIXELS * (self.agent_pos[0] + 0.5),
+            CELL_PIXELS * (self.agent_pos[1] + 0.5)
+        )
+        r.rotate(self.agent_dir * 90)
+        r.setLineColor(255, 0, 0)
+        r.setColor(255, 0, 0)
+        r.drawPolygon([
+            (-12, 10),
+            ( 12,  0),
+            (-12, -10)
+        ])
+        r.pop()
+
+        # Compute which cells are visible to the agent
+        _, vis_mask = self.gen_obs_grid()
+
+        # Compute the absolute coordinates of the bottom-left corner
+        # of the agent's view area
+        tx = (self.room_w+1)*(self.agent_pos[0]//(self.room_w+1))
+        ty = (self.room_h+1)*(self.agent_pos[1]//(self.room_h+1))
+        top_left = (tx, ty)
+
+        # For each cell in the visibility mask
+        if highlight:
+            for vis_j in range(0, self.agent_view_size):
+                for vis_i in range(0, self.agent_view_size):
+                    # If this cell is not visible, don't highlight it
+                    if not vis_mask[vis_i, vis_j]:
+                        continue
+
+                    # Compute the world coordinates of this cell
+                    abs_i = tx + vis_j
+                    abs_j = ty + vis_i
+
+                    # Highlight the cell
+                    r.fillRect(
+                        abs_i * tile_size,
+                        abs_j * tile_size,
+                        tile_size,
+                        tile_size,
+                        255, 255, 255, 75
+                    )
+
+        r.endFrame()
+
+        if mode == 'rgb_array':
+            return r.getArray()
+        elif mode == 'pixmap':
+            return r.getPixmap()
+        return r
+
+
 register(
 	id='MiniGrid-House-5x5-v0',
 	entry_point='gym_minigrid.envs:HouseEnv'
@@ -246,7 +333,7 @@ class House(Grid):
     MIN_ROOM_WIDTH = 3
     MIN_ROOM_HEIGHT = 3
 
-    def __init__(self, lattice, room_w=None, room_h=None, obstacles=True, doors_open=True, verbose=False):
+    def __init__(self, lattice, room_w=None, room_h=None, obstacles=True, doors_open=True, verbose=False, width=None, height=None):
         """
         Create house from lattice graph.
 
@@ -268,8 +355,8 @@ class House(Grid):
         self.room_w = room_w
         self.room_h = room_h
 
-        width = self.dim[0]*self.room_w+self.dim[0]+1
-        height = self.dim[1]*self.room_h+self.dim[1]+1
+        #width = self.dim[0]*self.room_w+self.dim[0]+1
+        #height = self.dim[1]*self.room_h+self.dim[1]+1
 
         # TODO fine-grained control of obstacles instead of single boolean
         # We could try to handle, from less to more random:
