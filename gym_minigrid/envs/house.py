@@ -312,6 +312,33 @@ class HouseEnv(MiniGridEnv):
         elif mode == 'pixmap':
             return r.getPixmap()
         return r
+    
+    class Agent0:
+        '''
+        Want an agent that given a graph outputs a string of [state, action] that takes it from the start to the end. 
+        We need two subagents (roomba and mapper) that each performs nx.shortest_path over a single room or the graph of rooms
+        '''
+        
+        def Mapper(lattice):
+            shortest_path = Lattice.shortest_path(self) #Since we specify start and end shortest_path is a list
+            actions = []
+            #Lets calculate the list of actions we should take
+            for i in (0,len(shortest_path)):
+                encoded_action = shortest_path[i+1]-shortest_path[i]
+                if encoded_action = (1,0):
+                    actions.append(1)         #Move right
+                if encoded_action = (-1,0):
+                    actions.append(0)         #Move left
+                if encoded_action = (0,1):
+                    actions.append(3)          #Move down
+                if encoded_action = (0,-1):
+                    actions.append(2)           #Move up
+            
+            return shortest_path, actions
+        
+        def Roomba((i,j), self):
+            '''
+            Recall that the format of rooms is a list of ((i,j),room_w,room_h, list of doors to the right and left)
 
 
 register(
@@ -432,10 +459,19 @@ class House(Grid):
             self.horz_wall(xL, yT, self.room_w+1)
 
             # Add doors if needed
+            doors = []
             if ((i,j),(i+1,j)) in self.lattice.edges:
-                self._add_door(coords=(xR, random.choice(range(yB+1,yT))))
+                coords=(xR, random.choice(range(yB+1,yT)))
+                self._add_door(coords)
+                doors += coords
             if ((i,j),(i,j+1)) in self.lattice.edges:
-                self._add_door(coords=(random.choice(range(xL+1,xR)), yT))
+                coords=(random.choice(range(xL+1,xR)), yT)
+                self._add_door(coords)
+                doors += coords
+        
+            #Construct list of rooms. Format ((i,j),room_w, room_h, list_of_doors to the right and up)
+            rooms += ((i,j), room_w, room_h, doors)
+
 
     def _add_door(self, coords):
         """Add door at coords = (x,y)"""
@@ -468,6 +504,7 @@ class House(Grid):
 
         # TODO add obstacles
         # TODO other objects?
+
 
 class Lattice:
     """
