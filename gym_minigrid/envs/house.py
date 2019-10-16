@@ -3,6 +3,7 @@ House Environment and related utilities.
 """
 
 from gym_minigrid.minigrid import Grid, MiniGridEnv, Door, Goal
+from gym_minigrid.minigrid import OBJECT_TO_IDX, IDX_TO_OBJECT
 from gym_minigrid.register import register
 
 from enum import IntEnum
@@ -45,6 +46,14 @@ class HouseEnv(MiniGridEnv):
         )
 
         self.actions = self.Actions
+
+    def _reward(self):
+        """
+        Compute the reward to be given upon success
+        """
+        # TODO maybe we want to override this?
+
+        return 1 - 0.9 * (self.step_count / self.max_steps)
 
     def _gen_grid(self, width=None, height=None):
         # Gen lattice
@@ -312,40 +321,172 @@ class HouseEnv(MiniGridEnv):
         elif mode == 'pixmap':
             return r.getPixmap()
         return r
-    
-    class Agent0:
-        '''
-        Want an agent that given a graph outputs a string of [state, action] that takes it from the start to the end. 
-        We need two subagents (roomba and mapper) that each performs nx.shortest_path over a single room or the graph of rooms
-        '''
-        
-        def Mapper(lattice):
-            shortest_path = Lattice.shortest_path(self) #Since we specify start and end shortest_path is a list
-            actions = []
-            #Lets calculate the list of actions we should take
-            for i in (0,len(shortest_path)):
-                encoded_action = shortest_path[i+1]-shortest_path[i]
-                if encoded_action = (1,0):
-                    actions.append(1)         #Move right
-                if encoded_action = (-1,0):
-                    actions.append(0)         #Move left
-                if encoded_action = (0,1):
-                    actions.append(3)          #Move down
-                if encoded_action = (0,-1):
-                    actions.append(2)           #Move up
-            
-            return shortest_path, actions
-        
-        def Roomba((i,j), self):
-            '''
-            Recall that the format of rooms is a list of ((i,j),room_w,room_h, list of doors to the right and left)
 
+# TODO figure out why this is giving problems at runtime
+#register(
+#	id='MiniGrid-House-5x5-v0',
+#	entry_point='gym_minigrid.envs:HouseEnv'
+#)
 
-register(
-	id='MiniGrid-House-5x5-v0',
-	entry_point='gym_minigrid.envs:HouseEnv'
-)
+class Agent0:
+    """
+    Want an agent that given a graph outputs a string of [state, action] that takes it from the start to the end.
+    We need two subagents (roomba and mapper) that each performs nx.shortest_path over a single room or the graph of rooms
+    """
 
+    def __init__(self, env, mapper=None, roomba=None):
+        """
+        Create agent_0 instance to act on environment env.
+
+        @param env: HouseEnv instance.
+        @param mapper: Mapper instance. Created on the fly if None.
+        @param roomba: Roomba instance. Created on the fly if None.
+        """
+
+        # Inherit actions and position from env
+        self._env = env
+        self.actions = self._env.actions
+        self.pos = self._env.agent_pos
+
+        # Assign or create subagents
+        self._mapper = mapper or Mapper()
+        self._roomba = roomba or Roomba()
+
+        # Calculate high level path across rooms
+        self.map = self._env.lattice
+        self.room_sequence = self._mapper.find_path(self._env.lattice)
+
+        # Save history of observations
+        self._all_obs = []
+
+    def run(self):
+        """Solve environment."""
+
+        for next_room in self.room_sequence:
+            # Generate initial observation in room
+            # Recall image is a numpy array of shape (n+2,m+2,3)
+            # if room dimensions are (n,m) - bc it includes walls
+            # obs[:,:,0] is object type - look up OBJECT_TO_IDX dict
+            # obs[:,:,1] is color - look up COLOR_TO_IDX dict
+            # obs[:,:,2] is state - 0: open; 1: closed; 2: locked
+            obs = self._env.gen_obs()['image']
+            self._all_obs += [obs]
+
+            # Calculate path within room
+            self.path = self._roomba.find_path(obs, next_room)
+
+            # Move following that path
+            for step in self.path:
+                obs, reward, done, _ = self._env.step(step)
+                self._all_obs += [obs]
+
+            # Ugly hack to deal w/ the fact that the agent view doesn't always change
+            # when it steps through the door. This is bc the view is defined in absolute
+            # terms using semi-open intervals like
+            #   [a, b) X (c, d]
+            # so that if the agent enters a room from the left or below it takes one step
+            # longer to see the next room. IDK if we should or can "fix" this
+            # Maybe it's better that the agent view is independent of where it came from
+            if self._all_obs[-1] == self._all_obs[-2]:
+                obs, reward, done, _ = self._env.step(step)
+                self._all_obs += [obs]
+
+        assert done, 'Agent could not find reward'
+
+class Mapper:
+
+    def __init__(self):
+        pass
+
+    def find_path(self, lattice):
+        """Find shortest path in map and return sequence of actions to be passed down to Roomba."""
+
+        # TODO check the NetworkX routine you're calling breaks ties
+
+        shortest_path = lattice.shortest_path() #Since we specify start and end shortest_path is a list
+        actions = []
+
+        #Lets calculate the list of actions we should take
+        for i, room in enumerate(shortest_path):
+            if i==0:
+                prev_room = room
+                continue
+
+            encoded_action = room[0]-prev_room[0], room[1]-prev_room[1]
+
+            if encoded_action == (-1,0):
+                actions.append(0)         #Move left
+            elif encoded_action == (1,0):
+                actions.append(1)         #Move right
+            elif encoded_action == (0,1):
+                actions.append(3)          #Move down
+            elif encoded_action == (0,-1):
+                actions.append(2)           #Move up
+            else:
+                raise ValueError('Room increment {} makes no sense'.format(encoded_action))
+
+            prev_room = room
+
+        return actions
+
+class Roomba:
+    """
+    Recall that the format of rooms is a list of ((i,j),room_w,room_h, list of doors to the right and left)
+    """
+
+    def __init__(self):
+        pass
+
+    def find_path(self, obs, next_room):
+        """Find path within room."""
+
+        objects = obs[:,:,0]
+        states = obs[:,:,2]
+
+        goal = list(zip(*np.where(objects==IDX_TO_OBJECT['goal'])))
+
+        if goal:
+            assert len(goal)==1, 'Cannot have more than one reward!'
+        else:
+            goal = self._get_door(objects, next_room)
+
+        cur_pos = obs.current_pos # TODO ???
+
+        return self._min_path(cur_pos, goal, obs)
+
+    def _min_path(self, initial, final, obs):
+        """Find shortest path between initial and final position, handling obstacles."""
+        cur_pos = initial
+        path = []
+
+        while cur_pos != final:
+            # TODO get agent direction back
+            # cur_pos += step in current direction until x coord of initial==final
+            # then same for Y
+            # TODO handle obstacles
+            break
+
+        raise NotImplementedError
+
+    def _get_door(obs, next_room):
+        """Find door given wall and observation."""
+
+        objects = obs[:,:,0]
+        states = obs[:,:,2]
+        doors = list(zip(*np.where(objects==IDX_TO_OBJECT['door'])))
+
+        if next_room == 0:
+            door = [d for d in doors if d[1]==0] # left
+        elif next_room == 1:
+            door = [d for d in doors if d[1]==objects.shape[1]] # right
+        elif next_room == 3:
+            door = [d for d in doors if d[0]==objects.shape[0]] # down
+        elif next_room == 2:
+            door = [d for d in doors if d[0]==0] # up
+        else:
+            raise ValueError('Unknown wall position: {}'.format(next_room))
+
+        return door[0]
 
 class House(Grid):
     """
@@ -468,9 +609,9 @@ class House(Grid):
                 coords=(random.choice(range(xL+1,xR)), yT)
                 self._add_door(coords)
                 doors += coords
-        
+
             #Construct list of rooms. Format ((i,j),room_w, room_h, list_of_doors to the right and up)
-            rooms += ((i,j), room_w, room_h, doors)
+            #rooms += ((i,j), room_w, room_h, doors)
 
 
     def _add_door(self, coords):
