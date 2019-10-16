@@ -20,13 +20,13 @@ class HouseEnv(MiniGridEnv):
     House environment for IDA
     """
 
-    class Actions(IntEnum):
-            # Turn left, turn right, move forward
-            left = 0
-            right = 1
-            up = 2
-            down = 3
-            done = 6
+#    class Actions(IntEnum):
+#            # Turn left, turn right, move forward
+#            left = 0
+#            right = 1
+#            up = 2
+#            down = 3
+#            done = 6
 
     def __init__(
             self,
@@ -51,7 +51,7 @@ class HouseEnv(MiniGridEnv):
         """
         Compute the reward to be given upon success
         """
-        # TODO maybe we want to override this?
+        # TODO copied it bc maybe we want to override it?
 
         return 1 - 0.9 * (self.step_count / self.max_steps)
 
@@ -67,7 +67,7 @@ class HouseEnv(MiniGridEnv):
         self.height = self.grid.height
 
         self.agent_pos = self.place_agent()
-        self.agent_dir = 0;
+        self.agent_dir = self._rand_int(0,4)
 
         # Generate the mission string
         self.mission = 'go to the end'
@@ -96,6 +96,25 @@ class HouseEnv(MiniGridEnv):
 
         return (x, y)
 
+    def get_room(self):
+        """
+        Get lattice coordinates of room the agent is in.
+        If the agent is crossing a door, return the room it is facing to.
+        If crossing a horizontal door and facing up/down, return the left room.
+        If crossing a vertical door and facing left/right, return the bottom room.
+        """
+        ax, ay = self.agent_pos
+        dx, dy = self.dir_vec
+
+        # Compute current room coords in lattice
+        ri = (ax-1)/(self.room_w+1)
+        ri += 1 if ri.is_integer() and dx==1 else 0
+
+        rj = (ay-1)/(self.room_h+1)
+        rj += 1 if rj.is_integer() and dy==1 else 0
+
+        return int(ri), int(rj)
+
     def get_view_coords(self, i, j):
         """
         Translate and rotate absolute grid coordinates (i, j) into the
@@ -103,26 +122,35 @@ class HouseEnv(MiniGridEnv):
         coordinates may be negative or outside of the agent's view size.
         """
 
-        ax, ay = self.agent_pos
+        # Compute room coordinates in lattice
+        ri, rj = self.get_room()
 
         # Compute the absolute coordinates of the top-left view corner
-        tx = (self.room_w+1)*(ax//(self.room_w+1))
-        ty = (self.room_h+1)*(ay//(self.room_h+1))
+        tx = 1 + ri*(self.room_w)
+        ty = 1 + rj*(self.room_h)
 
+        # Translate
         vx = i - tx
         vy = j - ty
 
         return vx, vy
 
     def get_view_exts(self):
+        """
+        Get the extents of the square set of tiles visible to the agent
+        Note: the bottom extent indices are not included in the set - what does this even mean?
+        """
 
-        ax, ay = self.agent_pos
+        # Compute room coordinates in lattice
+        ri, rj = self.get_room()
 
-        tx = (self.room_w+1)*(ax//(self.room_w+1))
-        ty = (self.room_h+1)*(ay//(self.room_h+1))
-        bx = tx + self.room_w+2
-        by = ty + self.room_h+2
-        return (tx, ty, bx, by)
+        # Compute the absolute coordinates of the top-left and bottom-right corners
+        tx = 1 + ri*(self.room_w)
+        ty = 1 + rj*(self.room_h)
+        bx = 1 + (ri+1)*(self.room_w)
+        by = 1 + (rj+1)*(self.room_h)
+
+        return tx, ty, bx, by
 
     def step(self, action):
         self.step_count += 1
@@ -322,11 +350,11 @@ class HouseEnv(MiniGridEnv):
             return r.getPixmap()
         return r
 
-# TODO figure out why this is giving problems at runtime
-#register(
-#	id='MiniGrid-House-5x5-v0',
-#	entry_point='gym_minigrid.envs:HouseEnv'
-#)
+# TODO figure out why this is giving problems at runtime in ipython
+register(
+	id='MiniGrid-House-5x5-v0',
+	entry_point='gym_minigrid.envs:HouseEnv'
+)
 
 class Agent0:
     """
@@ -349,8 +377,8 @@ class Agent0:
         self.pos = self._env.agent_pos
 
         # Assign or create subagents
-        self._mapper = mapper or Mapper()
-        self._roomba = roomba or Roomba()
+        self._mapper = mapper or Mapper(self._env)
+        self._roomba = roomba or Roomba(self._env)
 
         # Calculate high level path across rooms
         self.map = self._env.lattice
@@ -395,8 +423,8 @@ class Agent0:
 
 class Mapper:
 
-    def __init__(self):
-        pass
+    def __init__(self, env):
+        self._env = env
 
     def find_path(self, lattice):
         """Find shortest path in map and return sequence of actions to be passed down to Roomba."""
@@ -434,8 +462,8 @@ class Roomba:
     Recall that the format of rooms is a list of ((i,j),room_w,room_h, list of doors to the right and left)
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, env):
+        self._env = env
 
     def find_path(self, obs, next_room):
         """Find path within room."""
@@ -450,23 +478,45 @@ class Roomba:
         else:
             goal = self._get_door(objects, next_room)
 
-        cur_pos = obs.current_pos # TODO ???
+        cur_pos = self._env.get_view_coords(self._env.agent_pos)
 
         return self._min_path(cur_pos, goal, obs)
 
     def _min_path(self, initial, final, obs):
         """Find shortest path between initial and final position, handling obstacles."""
-        cur_pos = initial
-        path = []
 
-        while cur_pos != final:
-            # TODO get agent direction back
-            # cur_pos += step in current direction until x coord of initial==final
-            # then same for Y
-            # TODO handle obstacles
-            break
+        # TODO handle obstacles
 
-        raise NotImplementedError
+        x0, y0 = initial
+        x1, y1 = final
+        sx, sy, _ = obs.shape
+
+        # Start horizontally or vertically?
+        if x0==0 or x0==sx-1:
+            moves = abs(x1-x0), abs(y1-y0)
+        elif y0==0 or y0==sy-1:
+            moves = abs(y1-y0), abs(x1-x0)
+        else:
+            raise ValueError('The agent is not at a door!')
+
+        # Turn left or right?
+        if np.sign(x1-x0)==np.sign(y1-y0):
+            turn = self._env.actions.right
+        else:
+            turn = self._env.actions.left
+
+        # Move in 1st dimension
+        for _ in range(moves[0]):
+            actions += [self._env.actions.forward]
+
+        # Turn
+        actions += [turn]
+
+        # Move in 2nd dimension
+        for _ in range(moves[1]):
+            actions += [self._env.actions.forward]
+
+        return actions
 
     def _get_door(obs, next_room):
         """Find door given wall and observation."""
