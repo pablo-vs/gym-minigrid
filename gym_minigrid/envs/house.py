@@ -152,75 +152,75 @@ class HouseEnv(MiniGridEnv):
 
         return tx, ty, bx, by
 
-    def step(self, action):
-        self.step_count += 1
-
-        reward = 0
-        done = False
-
-        cur_pos = self.agent_pos
-
-        # Move up
-        if action == self.actions.up:
-                fwd_pos = cur_pos + np.array((0,-1))
-                fwd_cell = self.grid.get(*fwd_pos)
-                if fwd_cell == None or fwd_cell.can_overlap():
-                        self.agent_pos = fwd_pos
-                if fwd_cell != None and fwd_cell.type == 'goal':
-                        done = True
-                        reward = self._reward()
-                if fwd_cell != None and fwd_cell.type == 'lava':
-                        done = True
-
-        # Move down
-        elif action == self.actions.down:
-                fwd_pos = cur_pos + np.array((0,1))
-                fwd_cell = self.grid.get(*fwd_pos)
-                if fwd_cell == None or fwd_cell.can_overlap():
-                        self.agent_pos = fwd_pos
-                if fwd_cell != None and fwd_cell.type == 'goal':
-                        done = True
-                        reward = self._reward()
-                if fwd_cell != None and fwd_cell.type == 'lava':
-                        done = True
-
-        # Move left
-        elif action == self.actions.left:
-                fwd_pos = cur_pos + np.array((-1,0))
-                fwd_cell = self.grid.get(*fwd_pos)
-                if fwd_cell == None or fwd_cell.can_overlap():
-                        self.agent_pos = fwd_pos
-                if fwd_cell != None and fwd_cell.type == 'goal':
-                        done = True
-                        reward = self._reward()
-                if fwd_cell != None and fwd_cell.type == 'lava':
-                        done = True
-
-        # Move right
-        elif action == self.actions.right:
-                fwd_pos = cur_pos + np.array((1,0))
-                fwd_cell = self.grid.get(*fwd_pos)
-                if fwd_cell == None or fwd_cell.can_overlap():
-                        self.agent_pos = fwd_pos
-                if fwd_cell != None and fwd_cell.type == 'goal':
-                        done = True
-                        reward = self._reward()
-                if fwd_cell != None and fwd_cell.type == 'lava':
-                        done = True
-
-        # Done action (not used by default)
-        elif action == self.actions.done:
-                pass
-
-        else:
-                assert False, "unknown action"
-
-        if self.step_count >= self.max_steps:
-                done = True
-
-        obs = self.gen_obs()
-
-        return obs, reward, done, {}
+#    def step(self, action):
+#        self.step_count += 1
+#
+#        reward = 0
+#        done = False
+#
+#        cur_pos = self.agent_pos
+#
+#        # Move up
+#        if action == self.actions.up:
+#                fwd_pos = cur_pos + np.array((0,-1))
+#                fwd_cell = self.grid.get(*fwd_pos)
+#                if fwd_cell == None or fwd_cell.can_overlap():
+#                        self.agent_pos = fwd_pos
+#                if fwd_cell != None and fwd_cell.type == 'goal':
+#                        done = True
+#                        reward = self._reward()
+#                if fwd_cell != None and fwd_cell.type == 'lava':
+#                        done = True
+#
+#        # Move down
+#        elif action == self.actions.down:
+#                fwd_pos = cur_pos + np.array((0,1))
+#                fwd_cell = self.grid.get(*fwd_pos)
+#                if fwd_cell == None or fwd_cell.can_overlap():
+#                        self.agent_pos = fwd_pos
+#                if fwd_cell != None and fwd_cell.type == 'goal':
+#                        done = True
+#                        reward = self._reward()
+#                if fwd_cell != None and fwd_cell.type == 'lava':
+#                        done = True
+#
+#        # Move left
+#        elif action == self.actions.left:
+#                fwd_pos = cur_pos + np.array((-1,0))
+#                fwd_cell = self.grid.get(*fwd_pos)
+#                if fwd_cell == None or fwd_cell.can_overlap():
+#                        self.agent_pos = fwd_pos
+#                if fwd_cell != None and fwd_cell.type == 'goal':
+#                        done = True
+#                        reward = self._reward()
+#                if fwd_cell != None and fwd_cell.type == 'lava':
+#                        done = True
+#
+#        # Move right
+#        elif action == self.actions.right:
+#                fwd_pos = cur_pos + np.array((1,0))
+#                fwd_cell = self.grid.get(*fwd_pos)
+#                if fwd_cell == None or fwd_cell.can_overlap():
+#                        self.agent_pos = fwd_pos
+#                if fwd_cell != None and fwd_cell.type == 'goal':
+#                        done = True
+#                        reward = self._reward()
+#                if fwd_cell != None and fwd_cell.type == 'lava':
+#                        done = True
+#
+#        # Done action (not used by default)
+#        elif action == self.actions.done:
+#                pass
+#
+#        else:
+#                assert False, "unknown action"
+#
+#        if self.step_count >= self.max_steps:
+#                done = True
+#
+#        obs = self.gen_obs()
+#
+#        return obs, reward, done, {}
 
 
     def process_vis(self, grid, agent_pos):
@@ -471,12 +471,12 @@ class Roomba:
         objects = obs[:,:,0]
         states = obs[:,:,2]
 
-        goal = list(zip(*np.where(objects==IDX_TO_OBJECT['goal'])))
+        goal = list(zip(*np.where(objects==OBJECT_TO_IDX['goal'])))
 
         if goal:
             assert len(goal)==1, 'Cannot have more than one reward!'
         else:
-            goal = self._get_door(objects, next_room)
+            goal = self._get_door(obs, next_room)
 
         cur_pos = self._env.get_view_coords(self._env.agent_pos)
 
@@ -497,7 +497,8 @@ class Roomba:
         elif y0==0 or y0==sy-1:
             moves = abs(y1-y0), abs(x1-x0)
         else:
-            raise ValueError('The agent is not at a door!')
+            # initial case only, order doesn't matter
+            moves = abs(x1-x0), abs(y1-y0)
 
         # Turn left or right?
         if np.sign(x1-x0)==np.sign(y1-y0):
@@ -518,23 +519,27 @@ class Roomba:
 
         return actions
 
-    def _get_door(obs, next_room):
+    def _get_door(self, obs, next_room):
         """Find door given wall and observation."""
 
         objects = obs[:,:,0]
         states = obs[:,:,2]
-        doors = list(zip(*np.where(objects==IDX_TO_OBJECT['door'])))
+        doors = list(zip(*np.where(objects==OBJECT_TO_IDX['door'])))
+        print(doors)
+        print(next_room)
 
         if next_room == 0:
-            door = [d for d in doors if d[1]==0] # left
+            door = [d for d in doors if d[0]==0] # left
         elif next_room == 1:
             door = [d for d in doors if d[1]==objects.shape[1]] # right
         elif next_room == 3:
             door = [d for d in doors if d[0]==objects.shape[0]] # down
         elif next_room == 2:
-            door = [d for d in doors if d[0]==0] # up
+            door = [d for d in doors if d[1]==0] # up
         else:
             raise ValueError('Unknown wall position: {}'.format(next_room))
+
+        print(door)
 
         return door[0]
 
