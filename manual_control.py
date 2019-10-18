@@ -24,6 +24,11 @@ def main():
     # Load the gym environment
     env = gym.make(options.env_name)
 
+    print('\n')
+    print('Lattice dimensions: {}'.format(env.lattice.dim))
+    print('Agent placed in room: {}'.format(env.lattice.start))
+    print('\n')
+
     def resetEnv():
         env.reset()
         if hasattr(env, 'mission'):
@@ -50,10 +55,6 @@ def main():
             action = env.actions.right
         elif keyName == 'UP':
             action = env.actions.forward
-#        elif keyName == 'UP':
-#            action = env.actions.up
-#        elif keyName == 'DOWN':
-#            action = env.actions.down
 
         elif keyName == 'SPACE':
             action = env.actions.toggle
@@ -71,7 +72,25 @@ def main():
 
         obs, reward, done, info = env.step(action)
 
-        print('step=%s, reward=%.2f' % (env.step_count, reward))
+        print('\n')
+        print(obs['image'][:,:,0].T)
+
+        #print('step=%s, reward=%.2f' % (env.step_count, reward))
+
+        ax, ay = env.agent_pos
+        ri, rj = env.get_room()
+        tx, ty, bx, by = env.get_view_exts()
+
+#        print('\n')
+#        print('Agent position: {}'.format(env.agent_pos))
+#        print('Agent direction: {}'.format(env.dir_vec))
+#        print('Agent view size: {}'.format(env.agent_view_size))
+#        print('Agent room: {}'.format((ri,rj)))
+#        print('View extents:\n')
+#        print('  Top left X: {}'.format(tx))
+#        print('  Top left Y: {}'.format(ty))
+#        print('  Bottom right X: {}'.format(bx))
+#        print('  Bottom right Y: {}'.format(by))
 
         if done:
             print('done!')
