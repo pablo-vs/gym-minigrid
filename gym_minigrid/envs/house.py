@@ -20,14 +20,6 @@ class HouseEnv(MiniGridEnv):
     House environment for IDA
     """
 
-#    class Actions(IntEnum):
-#            # Turn left, turn right, move forward
-#            left = 0
-#            right = 1
-#            up = 2
-#            down = 3
-#            done = 6
-
     def __init__(
             self,
             room_w = 5,
@@ -75,24 +67,18 @@ class HouseEnv(MiniGridEnv):
     def place_agent(self, **kwargs):
         """Place agent in random tile in start room."""
 
-        # TODO the coordinate system we're using in Lattice and House is inverted
-        # about the Y axis wrt the one used to render envs
-        # This means that if we place the agent in the (0,0) room - bottom left -
-        # it gets rendered in the top left
-
         ## TODO: this whole block should be a subroutine
         i, j = self.lattice.start
 
-
-        xL = i * self.room_w + i
-        yB = j * self.room_h + j
+        xL = i*(self.room_w+1)
+        yT = j*(self.room_h+1)
         xR = xL + self.room_w + 1
-        yT = yB + self.room_h + 1
+        yB = yT + self.room_h + 1
 
         ##
 
-        x = random.choice(range(xL+2, xR-1))
-        y = random.choice(range(yB+2, yT-1))
+        x = random.choice(range(xL+1, xR))
+        y = random.choice(range(yT+1, yB))
 
         return (x, y)
 
@@ -100,18 +86,18 @@ class HouseEnv(MiniGridEnv):
         """
         Get lattice coordinates of room the agent is in.
         If the agent is crossing a door, return the room it is facing to.
-        If crossing a horizontal door and facing up/down, return the left room.
+        If crossing a horizontal door and facing up/down, return the right room.
         If crossing a vertical door and facing left/right, return the bottom room.
         """
         ax, ay = self.agent_pos
         dx, dy = self.dir_vec
 
         # Compute current room coords in lattice
-        ri = (ax-1)/(self.room_w+1)
-        ri += 1 if ri.is_integer() and dx==1 else 0
+        ri = ax/(self.room_w+1)
+        ri -= 1 if ri.is_integer() and dx==-1 else 0
 
-        rj = (ay-1)/(self.room_h+1)
-        rj += 1 if rj.is_integer() and dy==1 else 0
+        rj = ay/(self.room_h+1)
+        rj -= 1 if rj.is_integer() and dy==-1 else 0
 
         return int(ri), int(rj)
 
@@ -126,8 +112,8 @@ class HouseEnv(MiniGridEnv):
         ri, rj = self.get_room()
 
         # Compute the absolute coordinates of the top-left view corner
-        tx = 1 + ri*(self.room_w)
-        ty = 1 + rj*(self.room_h)
+        tx = ri*(self.room_w+1)
+        ty = rj*(self.room_h+1)
 
         # Translate
         vx = i - tx
@@ -145,83 +131,12 @@ class HouseEnv(MiniGridEnv):
         ri, rj = self.get_room()
 
         # Compute the absolute coordinates of the top-left and bottom-right corners
-        tx = 1 + ri*(self.room_w)
-        ty = 1 + rj*(self.room_h)
-        bx = 1 + (ri+1)*(self.room_w)
-        by = 1 + (rj+1)*(self.room_h)
+        tx = ri*(self.room_w+1)
+        ty = rj*(self.room_h+1)
+        bx = (ri+1)*(self.room_w+1)
+        by = (rj+1)*(self.room_h+1)
 
         return tx, ty, bx, by
-
-#    def step(self, action):
-#        self.step_count += 1
-#
-#        reward = 0
-#        done = False
-#
-#        cur_pos = self.agent_pos
-#
-#        # Move up
-#        if action == self.actions.up:
-#                fwd_pos = cur_pos + np.array((0,-1))
-#                fwd_cell = self.grid.get(*fwd_pos)
-#                if fwd_cell == None or fwd_cell.can_overlap():
-#                        self.agent_pos = fwd_pos
-#                if fwd_cell != None and fwd_cell.type == 'goal':
-#                        done = True
-#                        reward = self._reward()
-#                if fwd_cell != None and fwd_cell.type == 'lava':
-#                        done = True
-#
-#        # Move down
-#        elif action == self.actions.down:
-#                fwd_pos = cur_pos + np.array((0,1))
-#                fwd_cell = self.grid.get(*fwd_pos)
-#                if fwd_cell == None or fwd_cell.can_overlap():
-#                        self.agent_pos = fwd_pos
-#                if fwd_cell != None and fwd_cell.type == 'goal':
-#                        done = True
-#                        reward = self._reward()
-#                if fwd_cell != None and fwd_cell.type == 'lava':
-#                        done = True
-#
-#        # Move left
-#        elif action == self.actions.left:
-#                fwd_pos = cur_pos + np.array((-1,0))
-#                fwd_cell = self.grid.get(*fwd_pos)
-#                if fwd_cell == None or fwd_cell.can_overlap():
-#                        self.agent_pos = fwd_pos
-#                if fwd_cell != None and fwd_cell.type == 'goal':
-#                        done = True
-#                        reward = self._reward()
-#                if fwd_cell != None and fwd_cell.type == 'lava':
-#                        done = True
-#
-#        # Move right
-#        elif action == self.actions.right:
-#                fwd_pos = cur_pos + np.array((1,0))
-#                fwd_cell = self.grid.get(*fwd_pos)
-#                if fwd_cell == None or fwd_cell.can_overlap():
-#                        self.agent_pos = fwd_pos
-#                if fwd_cell != None and fwd_cell.type == 'goal':
-#                        done = True
-#                        reward = self._reward()
-#                if fwd_cell != None and fwd_cell.type == 'lava':
-#                        done = True
-#
-#        # Done action (not used by default)
-#        elif action == self.actions.done:
-#                pass
-#
-#        else:
-#                assert False, "unknown action"
-#
-#        if self.step_count >= self.max_steps:
-#                done = True
-#
-#        obs = self.gen_obs()
-#
-#        return obs, reward, done, {}
-
 
     def process_vis(self, grid, agent_pos):
         mask = np.zeros(shape=(grid.width, grid.height), dtype=np.bool)
@@ -243,9 +158,6 @@ class HouseEnv(MiniGridEnv):
         topX, topY, botX, botY = self.get_view_exts()
 
         grid = self.grid.slice(topX, topY, self.agent_view_size, self.agent_view_size)
-
-        for i in range(self.agent_dir + 1):
-                grid = grid.rotate_left()
 
         # Process occluders and visibility
         # Note that this incurs some performance cost
@@ -317,8 +229,7 @@ class HouseEnv(MiniGridEnv):
 
         # Compute the absolute coordinates of the bottom-left corner
         # of the agent's view area
-        tx = (self.room_w+1)*(self.agent_pos[0]//(self.room_w+1))
-        ty = (self.room_h+1)*(self.agent_pos[1]//(self.room_h+1))
+        tx, ty, _, _ = self.get_view_exts()
         top_left = (tx, ty)
 
         # For each cell in the visibility mask
@@ -387,37 +298,33 @@ class Agent0:
         # Save history of observations
         self._all_obs = []
 
+        # Generate initial observation
+        self._cur_obs = self._env.gen_obs()['image']
+
     def run(self):
         """Solve environment."""
 
-        for next_room in self.room_sequence:
+        for next_room in self.room_sequence + ['last_room']:
             # Generate initial observation in room
             # Recall image is a numpy array of shape (n+2,m+2,3)
             # if room dimensions are (n,m) - bc it includes walls
             # obs[:,:,0] is object type - look up OBJECT_TO_IDX dict
             # obs[:,:,1] is color - look up COLOR_TO_IDX dict
             # obs[:,:,2] is state - 0: open; 1: closed; 2: locked
-            obs = self._env.gen_obs()['image']
-            self._all_obs += [obs]
+            #obs = self._env.gen_obs()['image']
+            #self._all_obs += [obs]
 
             # Calculate path within room
-            self.path = self._roomba.find_path(obs, next_room)
+            self.path = self._roomba.find_path(self._cur_obs, next_room)
 
             # Move following that path
             for step in self.path:
-                obs, reward, done, _ = self._env.step(step)
-                self._all_obs += [obs]
-
-            # Ugly hack to deal w/ the fact that the agent view doesn't always change
-            # when it steps through the door. This is bc the view is defined in absolute
-            # terms using semi-open intervals like
-            #   [a, b) X (c, d]
-            # so that if the agent enters a room from the left or below it takes one step
-            # longer to see the next room. IDK if we should or can "fix" this
-            # Maybe it's better that the agent view is independent of where it came from
-            if self._all_obs[-1] == self._all_obs[-2]:
-                obs, reward, done, _ = self._env.step(step)
-                self._all_obs += [obs]
+                self._cur_obs, _, _, done = self._env.step(step)
+                # TODO this is ugly - let the lower function deal with the whole dict
+                self._cur_obs = self._cur_obs['image']
+                yield step
+                #obs, reward, done, _ = self._env.step(step)
+                #self._all_obs += [obs]
 
         assert done, 'Agent could not find reward'
 
@@ -429,7 +336,7 @@ class Mapper:
     def find_path(self, lattice):
         """Find shortest path in map and return sequence of actions to be passed down to Roomba."""
 
-        # TODO check the NetworkX routine you're calling breaks ties
+        # TODO check the NetworkX routine you're calling breaks ties - pretty sure it does
 
         shortest_path = lattice.shortest_path() #Since we specify start and end shortest_path is a list
         actions = []
@@ -478,7 +385,7 @@ class Roomba:
         else:
             goal = self._get_door(obs, next_room)
 
-        cur_pos = self._env.get_view_coords(self._env.agent_pos)
+        cur_pos = self._env.get_view_coords(*self._env.agent_pos)
 
         return self._min_path(cur_pos, goal, obs)
 
@@ -489,33 +396,55 @@ class Roomba:
 
         x0, y0 = initial
         x1, y1 = final
+        dir_vec = self._env.dir_vec
         sx, sy, _ = obs.shape
 
-        # Start horizontally or vertically?
-        if x0==0 or x0==sx-1:
-            moves = abs(x1-x0), abs(y1-y0)
-        elif y0==0 or y0==sy-1:
-            moves = abs(y1-y0), abs(x1-x0)
+        cur_pos = np.array(initial)
+        actions = []
+
+        # True if one of the coordinates is already equal to goal
+        aligned = lambda cur_pos: (cur_pos[0]==x1) or (cur_pos[1]==y1)
+
+        # Assumes already aligned
+        def face_goal(cur_pos, dir_vec, final):
+            # Vector from current position pointing towards goal
+            dr = np.array(final) - cur_pos
+
+            if np.dot(dr, dir_vec) != 0: # pointing backwards
+                return [self._env.actions.left, self._env.actions.left], -dir_vec
+
+            # Counterclockwise pi/2 rotation
+            rot = np.array([[0,-1], [1,0]])
+
+            if np.dot(dr, dir_vec) > 0:
+                # turn right
+                return [self._env.actions.right], np.dot(-rot, dir_vec)
+            else:
+                # turn left
+                return [self._env.actions.left], np.dot(rot, dir_vec)
+
+        if aligned(cur_pos):
+            dx, dy = dir_vec
+            facing_goal = ((x1-x0)/dx > 0) if dx!=0 else ((y1-y0)/dy>0)
+
+            if not facing_goal:
+                turn, dir_vec = face_goal(cur_pos, dir_vec, final)
+                actions += turn
+
+            while not np.array_equal(cur_pos, final):
+                actions += [self._env.actions.forward]
+                cur_pos += dir_vec
         else:
-            # initial case only, order doesn't matter
-            moves = abs(x1-x0), abs(y1-y0)
+            while not aligned(cur_pos):
+                actions += [self._env.actions.forward]
+                cur_pos += dir_vec
 
-        # Turn left or right?
-        if np.sign(x1-x0)==np.sign(y1-y0):
-            turn = self._env.actions.right
-        else:
-            turn = self._env.actions.left
+            turn, dir_vec = face_goal(cur_pos, dir_vec, final)
+            actions += [turn]
 
-        # Move in 1st dimension
-        for _ in range(moves[0]):
-            actions += [self._env.actions.forward]
-
-        # Turn
-        actions += [turn]
-
-        # Move in 2nd dimension
-        for _ in range(moves[1]):
-            actions += [self._env.actions.forward]
+            while not np.array_equal(cur_pos, final):
+                actions += [self._env.actions.forward]
+                cur_pos += dir_vec
 
         return actions
 
@@ -525,22 +454,19 @@ class Roomba:
         objects = obs[:,:,0]
         states = obs[:,:,2]
         doors = list(zip(*np.where(objects==OBJECT_TO_IDX['door'])))
-        print(doors)
-        print(next_room)
 
         if next_room == 0:
             door = [d for d in doors if d[0]==0] # left
         elif next_room == 1:
-            door = [d for d in doors if d[1]==objects.shape[1]] # right
+            door = [d for d in doors if d[1]==objects.shape[0]-1] # right
         elif next_room == 3:
-            door = [d for d in doors if d[0]==objects.shape[0]] # down
+            door = [d for d in doors if d[0]==objects.shape[1]-1] # down
         elif next_room == 2:
             door = [d for d in doors if d[1]==0] # up
         else:
             raise ValueError('Unknown wall position: {}'.format(next_room))
 
-        print(door)
-
+        # TODO this fails sometimes because door is empty - IDK why
         return door[0]
 
 class House(Grid):
@@ -616,7 +542,7 @@ class House(Grid):
         img = self.encode()
 
         self.lattice.plot(ax=ax[0])
-        ax[1].imshow(img[:,:,0].T, origin='lower')
+        ax[1].imshow(img[:,:,0]) #.T, origin='lower')
 
         ax[0].set_xticks([])
         ax[0].set_yticks([])
@@ -774,6 +700,8 @@ class Lattice:
 
         [ax.plot(*zip(*edge), **edge_kwds) for edge in self._graph.edges]
         [ax.scatter(*node, color=self._graph.nodes[node]['color'], **node_kwds) for node in self._graph.nodes]
+
+        ax.invert_yaxis()
 
         return ax
 
