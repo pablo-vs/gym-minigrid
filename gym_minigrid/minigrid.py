@@ -49,6 +49,11 @@ OBJECT_TO_IDX = {
 
 IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
 
+# Add extra agent states encoding agent_dir
+# This is needed to encode/decode grids correctly
+for agent_dir in range(4):
+    IDX_TO_OBJECT[OBJECT_TO_IDX['agent']+agent_dir] = 'agent'
+
 # Map of agent direction indices to vectors
 DIR_TO_VEC = [
     # Pointing right (positive X)
@@ -512,7 +517,7 @@ class Grid:
 
         r.pop()
 
-    def encode(self, vis_mask=None):
+    def encode(self, vis_mask=None, agent_dir=None):
         """
         Produce a compact numpy encoding of the grid
         """
@@ -527,7 +532,14 @@ class Grid:
                     v = self.get(i, j)
 
                     if v is None:
-                        array[i, j, 0] = OBJECT_TO_IDX['empty']
+                        # NOTE I'm changing the encoding here
+                        # so that we know where's our agent
+                        # and where it's facing
+                        # In order to avoid weird behaviour
+                        # we should not have empty tiles in
+                        # the house - I think I should enforce that
+                        array[i, j, 0] = OBJECT_TO_IDX['agent']
+                        array[i, j, 0] += agent_dir if agent_dir is not None else 0
                         array[i, j, 1] = 0
                         array[i, j, 2] = 0
                     else:
@@ -584,6 +596,8 @@ class Grid:
                     v = Goal()
                 elif objType == 'lava':
                     v = Lava()
+                elif objType == 'agent':
+                    v = None
                 else:
                     assert False, "unknown obj type in decode '%s'" % objType
 
@@ -594,6 +608,9 @@ class Grid:
     def process_vis(grid, agent_pos):
         mask = np.zeros(shape=(grid.width, grid.height), dtype=np.bool)
 
+        #print('AgentX: {}'.format(agent_pos[0]))
+        #print('AgentY: {}'.format(agent_pos[1]))
+        #print('Mask shape: {}'.format(mask.shape))
         mask[agent_pos[0], agent_pos[1]] = True
 
         for j in reversed(range(0, grid.height)):
