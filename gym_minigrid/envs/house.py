@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 
 CELL_PIXELS = 32
 
+
 class House(Grid):
     """
     Creates whole house environment from underlying lattice graph, adding doors, objects, rewards, obstacles, etc.
@@ -86,7 +87,7 @@ class House(Grid):
         # NOTE: None tiles are reserved for the agent - see self.encode
         assert all([tile is not None for tile in self.grid])
 
-    def plot(self, ax=None, agent=None):
+    def plot(self, ax=None, agent_plot=None):
         """Diagnostic plot."""
 
         if ax is None:
@@ -95,8 +96,8 @@ class House(Grid):
 
         img = self.encode()
 
-        if agent is not None:
-            i, j, v = agent
+        if agent_plot is not None:
+            i, j, v = agent_plot
             img[i, j, 0] = v
 
         self.lattice.plot(ax=ax[0])
@@ -239,6 +240,7 @@ class House(Grid):
         # TODO add obstacles
         # TODO other objects?
 
+
 class Lattice:
     """
     Connected subgraph of a lattice graph.
@@ -317,6 +319,7 @@ class Lattice:
         ax.invert_yaxis()
 
         return ax
+
 
 class HouseEnv(MiniGridEnv):
     """
@@ -653,11 +656,6 @@ class HouseEnv(MiniGridEnv):
             return r.getPixmap()
         return r
 
-# TODO figure out why this is giving problems at runtime in ipython
-register(
-	id='MiniGrid-House-5x5-v0',
-	entry_point='gym_minigrid.envs:HouseEnv'
-)
 
 class Agent0:
     """
@@ -709,6 +707,12 @@ class Agent0:
             #self._all_obs += [obs]
             print('Next room: {}'.format(next_room))
 
+            # Plot for debugging
+            agent_position_plot = tuple(self._env.agent_pos) + (1,)
+            print(agent_position_plot)
+            self._env.grid.plot(agent_plot=agent_position_plot)
+            plt.show()
+
             # Calculate path within room
             self.path = self._roomba.find_path(self._cur_obs, next_room)
             print(self.path)
@@ -725,6 +729,7 @@ class Agent0:
         return steps
 
         #assert done, 'Agent could not find reward'
+
 
 class Mapper:
 
@@ -765,6 +770,7 @@ class Mapper:
 
         return actions
 
+
 class Roomba:
     """
     Recall that the format of rooms is a list of ((i,j),room_w,room_h, list of doors to the right and left)
@@ -778,7 +784,8 @@ class Roomba:
 
         objects = obs[:,:,0]
         states = obs[:,:,2]
-
+        if next_room == 'last_room':
+            print("Hello")
         goal = list(zip(*np.where(objects==OBJECT_TO_IDX['goal'])))
 
         if goal:
@@ -834,7 +841,15 @@ class Roomba:
             # Counterclockwise pi/2 rotation
             rot = np.array([[0,-1], [1,0]])
 
-            if np.dot(dr, dir_vec) > 0:
+            """This was checking for np.dot > 0 but if it's non-zero we've already returned so it's not doing anything
+            we need to check for which of the two perpendicular directions we are facing. We can do it from the det
+            of the dr and dir vectors stacked (so the "cross-prod"), checked all cases and this should work. (If we stack
+            them differently then we have to reverse the signs)"""
+
+            dir_matrix = np.vstack((dr, dir_vec))
+            det = np.linalg.det(dir_matrix)
+
+            if det > 0:
                 # turn right
                 return self._env.actions.right, np.dot(-rot, dir_vec)
             else:
@@ -926,6 +941,7 @@ class Roomba:
         states = obs[:,:,2]
         doors = list(zip(*np.where(objects==OBJECT_TO_IDX['door'])))
 
+        """This had opposite coord system. 0,0 is top right so we need to transform door coordinates."""
         if next_room == (-1,0):
             door = [d for d in doors if d[0]==0] # left
         elif next_room == (1,0):
@@ -941,6 +957,7 @@ class Roomba:
         # It always happens when next_room is (0,1) = bottom
         # but the doors are either only left or right
         try:
+
             return door[0]
         except IndexError:
             # Where am I going?
@@ -985,6 +1002,7 @@ class Roomba:
 
         return vec
 
+
 def get_random_connected_subgraph(graph):
     # TODO add sparseness parameter
     """
@@ -1000,3 +1018,10 @@ def get_random_connected_subgraph(graph):
     graph.add_edge(*chosen)
 
     return graph
+
+
+house = HouseEnv()
+plt.show()
+a0 = Agent0(house)
+result = a0.run()
+print("Done")
